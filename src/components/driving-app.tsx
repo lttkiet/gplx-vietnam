@@ -116,7 +116,7 @@ export function DrivingApp() {
   function toggleSaved(id: number) { setStore((s) => ({ ...s, saved: s.saved.includes(id) ? s.saved.filter((x) => x !== id) : [...s.saved, id] })); }
 
   const navItems: { view: View; label: string; icon: typeof Home }[] = [
-    { view: "home", label: "Trang chủ", icon: Home }, { view: "topics", label: "Chủ đề", icon: BookOpen }, { view: "saved", label: "Đã lưu", icon: Bookmark }, { view: "progress", label: "Tiến độ", icon: BarChart3 },
+    { view: "home", label: "Trang chủ", icon: Home }, { view: "topics", label: "Câu hỏi", icon: BookOpen }, { view: "saved", label: "Đã lưu", icon: Bookmark }, { view: "progress", label: "Tiến độ", icon: BarChart3 },
   ];
 
   return <div className="app-shell">
@@ -147,7 +147,7 @@ function HomeView({ attempted, accuracy, store, startQuiz, startQuickPractice, n
       <div><span>Thi thử gần nhất</span><b>{store.testHistory.length ? `${store.testHistory.at(-1)}/50` : "—"}</b></div>
     </section>
     <section className="simple-actions" aria-label="Lối tắt học tập">
-      <button className="simple-action" type="button" onClick={() => navigate("topics")}><BookOpen size={20}/><span><b>Chọn chủ đề</b><small>Học theo 6 chương</small></span><ArrowRight size={17}/></button>
+      <button className="simple-action" type="button" onClick={() => navigate("topics")}><Search size={20}/><span><b>Chọn câu hỏi</b><small>Tìm số câu hoặc nội dung</small></span><ArrowRight size={17}/></button>
       <button className="simple-action" type="button" disabled={!weak.length} onClick={() => startQuiz(weak)}><CircleAlert size={20}/><span><b>Ôn câu sai</b><small>{weak.length ? `${weak.length} câu cần xem lại` : "Các câu trả lời sai sẽ hiện ở đây"}</small></span><ArrowRight size={17}/></button>
       <button className="simple-action" type="button" onClick={() => startQuiz(questions, "test")}><Timer size={20}/><span><b>Thi thử hạng B</b><small>50 câu · 33 phút</small></span><ArrowRight size={17}/></button>
     </section>
@@ -166,20 +166,20 @@ function TopicsView({ store, startQuiz }: { store: Store; startQuiz: (q: Questio
   const visibleResults = results.slice(0, 20);
 
   return <div className="page inner-page">
-    <span className="eyebrow"><BookOpen size={15}/> HỌC CÓ HỆ THỐNG</span>
-    <h1>Học theo chủ đề</h1>
-    <p className="lead">Chọn một trong 6 chương của bộ 600 câu hỏi, hoặc tìm câu cụ thể.</p>
+    <span className="eyebrow"><BookOpen size={15}/> BỘ CÂU HỎI</span>
+    <h1>Chọn câu hỏi</h1>
+    <p className="lead">Tìm theo số câu hoặc nội dung, hoặc duyệt theo chủ đề.</p>
     <div className="question-search-box">
-      <label htmlFor="question-search">Tìm trong 600 câu hỏi</label>
+      <label htmlFor="question-search">Tìm câu trong bộ 600 câu hỏi</label>
       <div className="question-search">
         <Search size={18} aria-hidden="true" />
-        <input id="question-search" type="text" inputMode="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Số câu, nội dung hoặc đáp án" autoComplete="off" />
+        <input id="question-search" type="text" inputMode="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Ví dụ: 260 hoặc từ khóa câu hỏi" autoComplete="off" />
         <button type="button" aria-label="Xóa nội dung tìm kiếm" disabled={!query} onClick={() => setQuery("")}><X size={17}/></button>
       </div>
     </div>
     {searchTerm ? <>
       <p className="search-status" role="status">{results.length ? `${results.length} câu phù hợp${results.length > visibleResults.length ? ` · đang hiển thị ${visibleResults.length} câu đầu` : ""}` : "Không tìm thấy câu phù hợp. Thử số câu hoặc từ khóa khác."}</p>
-      {visibleResults.length > 0 && <ul className="question-search-results">{visibleResults.map(q => <li key={q.id}><button className="question-search-result" type="button" onClick={() => startQuiz([q])} aria-label={`Mở luyện tập câu ${q.id}: ${q.question}`}><span>Câu {q.id} · {q.category}</span><b>{q.question}</b><small>Mở câu hỏi <ArrowRight size={14}/></small></button></li>)}</ul>}
+      {visibleResults.length > 0 && <ul className="question-search-results">{visibleResults.map(q => <li key={q.id}><button className="question-search-result" type="button" onClick={() => startQuiz([q])} aria-label={`Chọn và luyện tập câu ${q.id}: ${q.question}`}><span>Câu {q.id} · {q.category}</span><b>{q.question}</b><small>Luyện câu này <ArrowRight size={14}/></small></button></li>)}</ul>}
     </> : <div className="topic-list">{categories.map((c) => {
       const set = questions.filter(q => q.category === c.name);
       const done = set.filter(q => store.stats[q.id]).length;
