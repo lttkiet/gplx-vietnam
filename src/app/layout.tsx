@@ -6,7 +6,7 @@ const bodyFont = Be_Vietnam_Pro({ subsets: ["latin", "vietnamese"], variable: "-
 const displayFont = Bricolage_Grotesque({ subsets: ["latin", "vietnamese"], variable: "--font-display" });
 
 export const metadata: Metadata = {
-  title: "Vững Tay Lái — Ôn thi GPLX Việt Nam",
+  title: "Ôn thi GPLX Việt Nam",
   description: "Học lý thuyết, luyện câu sai và thi thử giấy phép lái xe hạng B.",
 };
 

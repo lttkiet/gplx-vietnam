@@ -1,4 +1,4 @@
-# Vững Tay Lái
+# Ôn thi GPLX Việt Nam
 
 Ứng dụng học độc lập để ôn lý thuyết giấy phép lái xe tại Việt Nam. Bộ dữ liệu hiện có đủ 600 câu theo sáu chương của Cục Cảnh sát giao thông, gồm đáp án, 60 câu điểm liệt và 319 hình minh họa được trích từ tài liệu.
 

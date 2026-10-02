@@ -14,7 +14,7 @@ const STORE_KEY = "vung-tay-lai-progress-v2";
 function getToday() { return new Date().toLocaleDateString("en-CA"); }
 
 function Logo() {
-  return <div className="logo" aria-label="Vững Tay Lái"><span className="logo-mark"><CarFront size={24} strokeWidth={2.4} /></span><span><b>Vững Tay Lái</b><small>Ôn thi GPLX Việt Nam</small></span></div>;
+  return <div className="logo" aria-label="Ôn thi GPLX Việt Nam"><span className="logo-mark"><CarFront size={24} strokeWidth={2.4} /></span><span className="logo-label">Ôn thi GPLX Việt Nam</span></div>;
 }
 
 function CategoryIcon({ name, size = 20 }: { name: Category; size?: number }) {
