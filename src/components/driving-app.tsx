@@ -1,14 +1,15 @@
 "use client";
 
 import { useEffect, useMemo, useState } from "react";
-import { ArrowLeft, ArrowRight, BarChart3, BookOpen, Bookmark, BookmarkCheck, CarFront, Check, ChevronRight, CircleAlert, Clock3, Flame, Heart, Home, Map, Play, RotateCcw, Signpost, Sparkles, Target, Timer, Trophy, X } from "lucide-react";
+import Image from "next/image";
+import { ArrowLeft, ArrowRight, BarChart3, BookOpen, Bookmark, BookmarkCheck, CarFront, Check, ChevronRight, CircleAlert, Clock3, Flame, HardDrive, Heart, Home, Map, Play, RotateCcw, Search, Signpost, Sparkles, Target, Timer, Trophy, X } from "lucide-react";
 import { categories, Category, Question, questions } from "@/lib/questions";
 
 type View = "home" | "topics" | "quiz" | "saved" | "progress" | "result";
 type Stats = Record<number, { attempts: number; correct: number }>;
 type Store = { saved: number[]; stats: Stats; testHistory: number[]; activityDays: string[] };
 const initialStore: Store = { saved: [], stats: {}, testHistory: [], activityDays: [] };
-const STORE_KEY = "vung-tay-lai-progress-v1";
+const STORE_KEY = "vung-tay-lai-progress-v2";
 
 function getToday() { return new Date().toLocaleDateString("en-CA"); }
 
@@ -17,11 +18,34 @@ function Logo() {
 }
 
 function CategoryIcon({ name, size = 20 }: { name: Category; size?: number }) {
-  if (name === "Biển báo đường bộ") return <Signpost size={size} />;
+  if (name === "Báo hiệu đường bộ") return <Signpost size={size} />;
+  if (name === "Sa hình và xử lý tình huống") return <Map size={size} />;
   if (name === "Kỹ thuật lái xe") return <CarFront size={size} />;
-  if (name === "Văn hóa giao thông") return <Heart size={size} />;
-  if (name === "Sa hình") return <Map size={size} />;
+  if (name === "Văn hóa giao thông, đạo đức và cứu hộ") return <Heart size={size} />;
   return <BookOpen size={size} />;
+}
+
+function EvidenceKindLabel({ kind }: { kind: Question["evidence"][number]["kind"] }) {
+  const labels = {
+    "official-exam-bank": "Đáp án trong bộ đề CSGT",
+    law: "Căn cứ pháp lý / kỹ thuật",
+    "law-context": "Quy định liên quan (không phải căn cứ trực tiếp)",
+    "technical-conflict": "Lưu ý kỹ thuật có nội dung mâu thuẫn",
+  };
+  return <span className="evidence-kind">{labels[kind]}</span>;
+}
+
+function normalizeSearchText(value: string) {
+  return value.toLocaleLowerCase("vi").normalize("NFD").replace(/[\u0300-\u036f]/g, "").replace(/đ/g, "d").trim();
+}
+
+function sampleQuestions(pool: Question[], count: number) {
+  const shuffled = [...pool];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled.slice(0, Math.min(count, shuffled.length));
 }
 
 export function DrivingApp() {
@@ -29,12 +53,14 @@ export function DrivingApp() {
   const [store, setStore] = useState<Store>(initialStore);
   const [hydrated, setHydrated] = useState(false);
   const [quiz, setQuiz] = useState<Question[]>([]);
+  const [sessionMisses, setSessionMisses] = useState<Question[]>([]);
   const [quizIndex, setQuizIndex] = useState(0);
   const [selected, setSelected] = useState<number | null>(null);
   const [revealed, setRevealed] = useState(false);
   const [score, setScore] = useState(0);
   const [quizMode, setQuizMode] = useState<"learn" | "test">("learn");
   const [timeLeft, setTimeLeft] = useState(0);
+  const [criticalMissed, setCriticalMissed] = useState(false);
 
   useEffect(() => {
     try { const raw = localStorage.getItem(STORE_KEY); if (raw) setStore(JSON.parse(raw)); } catch { /* private browsing fallback */ }
@@ -60,17 +86,33 @@ export function DrivingApp() {
 
   function navigate(next: View) { setView(next); window.scrollTo({ top: 0, behavior: "smooth" }); }
   function startQuiz(pool = questions, mode: "learn" | "test" = "learn") {
-    const list = mode === "test" ? [...pool].sort(() => Math.random() - .5).slice(0, 10) : pool;
-    setQuiz(list); setQuizIndex(0); setSelected(null); setRevealed(false); setScore(0); setQuizMode(mode); setTimeLeft(mode === "test" ? 15 * 60 : 0); navigate("quiz");
+    let list = pool;
+    if (mode === "test") {
+      const critical = sampleQuestions(questions.filter((q) => q.critical), 1)[0];
+      const regular = sampleQuestions(pool.filter((q) => !q.critical), 49);
+      list = sampleQuestions([...regular, ...(critical ? [critical] : [])], 50);
+    }
+    setQuiz(list); setSessionMisses([]); setQuizIndex(0); setSelected(null); setRevealed(false); setScore(0); setCriticalMissed(false); setQuizMode(mode); setTimeLeft(mode === "test" ? 33 * 60 : 0); navigate("quiz");
   }
   function submitAnswer() {
     if (selected === null || revealed) return;
     const q = quiz[quizIndex]; const ok = selected === q.correct;
-    setRevealed(true); if (ok) setScore((s) => s + 1);
+    setRevealed(true); if (ok) setScore((s) => s + 1); else {
+      setSessionMisses((misses) => misses.some((miss) => miss.id === q.id) ? misses : [...misses, q]);
+      if (q.critical && quizMode === "test") setCriticalMissed(true);
+    }
     setStore((prev) => ({ ...prev, stats: { ...prev.stats, [q.id]: { attempts: (prev.stats[q.id]?.attempts ?? 0) + 1, correct: (prev.stats[q.id]?.correct ?? 0) + (ok ? 1 : 0) } }, activityDays: prev.activityDays.includes(getToday()) ? prev.activityDays : [...prev.activityDays, getToday()] }));
   }
   function nextQuestion() { if (quizIndex === quiz.length - 1) finishQuiz(); else { setQuizIndex((i) => i + 1); setSelected(null); setRevealed(false); } }
-  function finishQuiz() { setStore((prev) => quizMode === "test" ? { ...prev, testHistory: [...prev.testHistory, score] } : prev); navigate("result"); }
+  function finishQuiz() {
+    const unanswered = quiz[quizIndex];
+    if (quizMode === "test" && unanswered && !revealed) {
+      setSessionMisses((misses) => misses.some((miss) => miss.id === unanswered.id) ? misses : [...misses, unanswered]);
+      if (unanswered.critical) setCriticalMissed(true);
+    }
+    setStore((prev) => quizMode === "test" ? { ...prev, testHistory: [...prev.testHistory, score] } : prev);
+    navigate("result");
+  }
   function toggleSaved(id: number) { setStore((s) => ({ ...s, saved: s.saved.includes(id) ? s.saved.filter((x) => x !== id) : [...s.saved, id] })); }
 
   const navItems: { view: View; label: string; icon: typeof Home }[] = [
@@ -78,45 +120,152 @@ export function DrivingApp() {
   ];
 
   return <div className="app-shell">
-    <header><div className="header-inner"><button className="brand-button" onClick={() => navigate("home")}><Logo /></button><nav aria-label="Điều hướng chính">{navItems.map(({ view: itemView, label }) => <button key={itemView} className={view === itemView ? "active" : ""} onClick={() => navigate(itemView)}>{label}</button>)}</nav><button className="profile-button"><span>LK</span><span className="profile-copy">Học viên<small>Hạng B</small></span></button></div></header>
-    <main>
-      {view === "home" && <HomeView attempted={attempted} accuracy={accuracy} streak={streak} store={store} startQuiz={startQuiz} navigate={navigate} />}
+    <a className="skip-link" href="#main-content">Bỏ qua điều hướng</a>
+    <header><div className="header-inner"><button className="brand-button" onClick={() => navigate("home")}><Logo /></button><nav aria-label="Điều hướng chính">{navItems.map(({ view: itemView, label }) => <button key={itemView} aria-current={view === itemView ? "page" : undefined} className={view === itemView ? "active" : ""} onClick={() => navigate(itemView)}>{label}</button>)}</nav><div className="profile-button" style={{ cursor: "default" }} role="note" aria-label="Dùng cá nhân. Tiến độ lưu trên thiết bị này."><span><HardDrive size={17} /></span><span className="profile-copy" style={{ display: "block" }}>Dùng cá nhân<small>Lưu trên thiết bị</small></span></div></div></header>
+    <main id="main-content" tabIndex={-1}>
+      {view === "home" && <HomeView attempted={attempted} accuracy={accuracy} streak={streak} store={store} startQuiz={startQuiz} startQuickPractice={() => startQuiz(sampleQuestions(questions, 10))} navigate={navigate} />}
       {view === "topics" && <TopicsView store={store} startQuiz={startQuiz} />}
-      {view === "saved" && <SavedView store={store} startQuiz={startQuiz} />}
+      {view === "saved" && <SavedView store={store} startQuiz={startQuiz} toggleSaved={toggleSaved} />}
       {view === "progress" && <ProgressView store={store} accuracy={accuracy} attempted={attempted} streak={streak} />}
       {view === "quiz" && quiz.length > 0 && <QuizView question={quiz[quizIndex]} index={quizIndex} total={quiz.length} selected={selected} setSelected={setSelected} revealed={revealed} submitAnswer={submitAnswer} nextQuestion={nextQuestion} saved={store.saved} toggleSaved={toggleSaved} mode={quizMode} timeLeft={timeLeft} quit={() => navigate("home")} />}
-      {view === "result" && <ResultView score={score} total={quiz.length} mode={quizMode} retry={() => startQuiz(quiz, quizMode)} home={() => navigate("home")} />}
+      {view === "result" && <ResultView score={score} total={quiz.length} mode={quizMode} criticalMissed={criticalMissed} misses={sessionMisses} reviewMisses={() => startQuiz(sessionMisses)} retry={() => startQuiz(quizMode === "test" ? questions : quiz, quizMode)} home={() => navigate("home")} />}
     </main>
-    <div className="mobile-nav">{navItems.map(({ view: itemView, label, icon: Icon }) => <button key={itemView} className={view === itemView ? "active" : ""} onClick={() => navigate(itemView)}><Icon size={20} /><span>{label}</span></button>)}</div>
+    <nav className="mobile-nav" aria-label="Điều hướng chính">{navItems.map(({ view: itemView, label, icon: Icon }) => <button key={itemView} aria-current={view === itemView ? "page" : undefined} className={view === itemView ? "active" : ""} onClick={() => navigate(itemView)}><Icon size={20} /><span>{label}</span></button>)}</nav>
   </div>;
 }
 
-function HomeView({ attempted, accuracy, streak, store, startQuiz, navigate }: { attempted: number; accuracy: number; streak: number; store: Store; startQuiz: (q?: Question[], m?: "learn" | "test") => void; navigate: (v: View) => void }) {
+function HomeView({ attempted, accuracy, streak, store, startQuiz, startQuickPractice, navigate }: { attempted: number; accuracy: number; streak: number; store: Store; startQuiz: (q?: Question[], m?: "learn" | "test") => void; startQuickPractice: () => void; navigate: (v: View) => void }) {
   const weak = questions.filter((q) => store.stats[q.id] && store.stats[q.id].correct < store.stats[q.id].attempts);
   return <div className="page home-page">
-    <section className="welcome-row"><div><span className="eyebrow"><Sparkles size={15} /> SẴN SÀNG CHINH PHỤC</span><h1>Chào bạn, cùng vững tay lái nhé!</h1><p>Mỗi câu hỏi hôm nay là một bước gần hơn đến tấm bằng của bạn.</p></div><div className="streak-pill"><Flame size={24} fill="currentColor" /><span><b>{streak}</b><small>ngày liên tiếp</small></span></div></section>
+    <section className="welcome-row"><div><span className="eyebrow"><Sparkles size={15} /> SẴN SÀNG CHINH PHỤC</span><h1>Chào bạn, cùng vững tay lái nhé!</h1><p>Học theo nhịp của bạn — tiến độ được lưu trên thiết bị này.</p></div><div className="streak-pill"><Flame size={24} fill="currentColor" /><span><b>{streak}</b><small>ngày liên tiếp</small></span></div></section>
     <section className="hero-card">
-      <div className="hero-copy"><span className="mini-label"><Target size={14} /> Gợi ý cho bạn</span><h2>{attempted ? "Tiếp tục hành trình của bạn" : "Bắt đầu với những câu nền tảng"}</h2><p>{attempted ? `Bạn đã khám phá ${attempted} câu hỏi. Ôn lại thường xuyên để kiến thức thật chắc.` : "Làm quen với các quy tắc quan trọng nhất trước khi bước vào bài thi thử."}</p><div className="hero-actions"><button className="primary" onClick={() => startQuiz()}><Play size={18} fill="currentColor" /> Học ngay</button><button className="text-button" onClick={() => navigate("topics")}>Chọn chủ đề <ArrowRight size={16} /></button></div></div>
+      <div className="hero-copy"><span className="mini-label"><Target size={14} /> Gợi ý cho bạn</span><h2>{attempted ? "Luyện thêm một lượt" : "Bắt đầu với 10 câu ngẫu nhiên"}</h2><p>{attempted ? `Bạn đã khám phá ${attempted} câu hỏi. Mỗi lượt ôn gồm 10 câu — học theo nhịp của bạn.` : "Luyện một lượt 10 câu từ bộ đề 600 câu, hoặc tự chọn chủ đề bạn muốn ôn."}</p><div className="hero-actions"><button className="primary" onClick={startQuickPractice}><Play size={18} fill="currentColor" /> Luyện 10 câu</button><button className="text-button" onClick={() => navigate("topics")}>Chọn chủ đề <ArrowRight size={16} /></button></div></div>
       <div className="road-illustration" aria-hidden="true"><div className="sun"/><div className="cloud one"/><div className="cloud two"/><div className="hills"/><div className="road"><span/><span/><span/></div><div className="mini-car"><CarFront size={38}/></div><div className="road-sign">50</div></div>
     </section>
-    <section className="stats-grid"><div className="stat-card"><span className="stat-icon coral"><BookOpen /></span><div><span>Đã học</span><b>{attempted}<small> / 600 câu</small></b></div></div><div className="stat-card"><span className="stat-icon green"><Target /></span><div><span>Độ chính xác</span><b>{accuracy}<small>%</small></b></div></div><div className="stat-card"><span className="stat-icon yellow"><Trophy /></span><div><span>Thi thử gần nhất</span><b>{store.testHistory.length ? `${store.testHistory.at(-1)}/10` : "—"}</b></div></div></section>
-    <section className="section-block"><div className="section-head"><div><span className="section-kicker">HỌC THEO LỘ TRÌNH</span><h2>Khám phá từng chủ đề</h2></div><button onClick={() => navigate("topics")}>Xem tất cả <ChevronRight size={17}/></button></div><div className="topic-grid">{categories.slice(0,4).map((c) => { const set = questions.filter(q => q.category === c.name); const done = set.filter(q => store.stats[q.id]).length; return <button className="topic-card" key={c.name} onClick={() => startQuiz(set)}><span className="topic-icon" style={{ background: c.bg, color: c.color }}><CategoryIcon name={c.name} size={26}/></span><span className="topic-info"><b>{c.name}</b><small>{set.length} câu minh họa</small><span className="progress-bar"><i style={{ width: `${set.length ? done / set.length * 100 : 0}%`, background: c.color }}/></span><em>{done} đã học</em></span><ChevronRight size={19}/></button>})}</div></section>
-    <section className="bottom-grid"><div className="review-card"><div className="review-icon"><CircleAlert size={25}/></div><div><span className="section-kicker">ÔN TẬP THÔNG MINH</span><h3>Câu cần xem lại</h3><p>{weak.length ? `Có ${weak.length} câu bạn từng trả lời chưa đúng.` : "Những câu trả lời sai sẽ xuất hiện ở đây để bạn ôn lại."}</p></div><button disabled={!weak.length} onClick={() => startQuiz(weak)}>Ôn ngay <ArrowRight size={16}/></button></div><div className="exam-card"><div><span className="section-kicker light">MÔ PHỎNG KỲ THI</span><h3>Thi thử hạng B</h3><p>10 câu · 15 phút · Có câu điểm liệt</p></div><button onClick={() => startQuiz(questions, "test")}><Timer size={18}/> Bắt đầu thi</button></div></section>
-    <p className="source-note">Bộ câu hỏi minh họa · Tham chiếu khung 600 câu CSGT ban hành tháng 05/2025</p>
+    <section className="stats-grid" aria-label="Tóm tắt tiến độ"><div className="stat-card"><span className="stat-icon coral"><BookOpen /></span><div><span>Đã học</span><b>{attempted}<small> / 600 câu</small></b></div></div><div className="stat-card"><span className="stat-icon green"><Target /></span><div><span>Độ chính xác</span><b>{attempted ? accuracy : "—"}<small>{attempted ? "%" : ""}</small></b></div></div><div className="stat-card"><span className="stat-icon yellow"><Trophy /></span><div><span>Thi thử gần nhất</span><b>{store.testHistory.length ? `${store.testHistory.at(-1)}/50` : "—"}</b></div></div></section>
+    <section className="section-block"><div className="section-head"><div><span className="section-kicker">ĐỦ 6 CHƯƠNG · 600 CÂU</span><h2>Khám phá từng chủ đề</h2></div><button onClick={() => navigate("topics")}>Xem tất cả <ChevronRight size={17}/></button></div><div className="topic-grid">{categories.map((c) => { const set = questions.filter(q => q.category === c.name); const done = set.filter(q => store.stats[q.id]).length; return <button className="topic-card" key={c.name} onClick={() => startQuiz(set)}><span className="topic-icon" style={{ background: c.bg, color: c.color }}><CategoryIcon name={c.name} size={26}/></span><span className="topic-info"><b>{c.name}</b><small>{set.length} câu</small><span className="progress-bar" role="progressbar" aria-label={`Tiến độ học ${c.name}`} aria-valuemin={0} aria-valuemax={set.length} aria-valuenow={done}><i style={{ width: `${set.length ? done / set.length * 100 : 0}%`, background: c.color }}/></span><em>{done} đã học</em></span><ChevronRight size={19}/></button>})}</div></section>
+    <section className="bottom-grid"><div className="review-card"><div className="review-icon"><CircleAlert size={25}/></div><div><span className="section-kicker">ÔN TẬP THÔNG MINH</span><h3>Câu cần xem lại</h3><p>{weak.length ? `Có ${weak.length} câu bạn từng trả lời chưa đúng.` : "Những câu trả lời sai sẽ xuất hiện ở đây để bạn ôn lại."}</p></div><button disabled={!weak.length} onClick={() => startQuiz(weak)}>Ôn ngay <ArrowRight size={16}/></button></div><div className="exam-card"><div><span className="section-kicker light">MÔ PHỎNG KỲ THI</span><h3>Thi thử hạng B</h3><p>50 câu · 33 phút · Sai câu điểm liệt là không đạt</p></div><button onClick={() => startQuiz(questions, "test")}><Timer size={18}/> Bắt đầu thi</button></div></section>
+    <p className="source-note">600 câu hỏi theo bộ Cục Cảnh sát giao thông, Bộ Công an ban hành năm 2025. <a href="https://xaydungchinhsach.chinhphu.vn/huong-dan-su-dung-bo-600-cau-hoi-dung-de-sat-hach-lai-xe-co-gioi-duong-bo-119250513110514585.htm" target="_blank" rel="noreferrer">Xem nguồn chính thức</a></p>
   </div>;
 }
 
-function TopicsView({ store, startQuiz }: { store: Store; startQuiz: (q: Question[]) => void }) { return <div className="page inner-page"><span className="eyebrow"><BookOpen size={15}/> HỌC CÓ HỆ THỐNG</span><h1>Học theo chủ đề</h1><p className="lead">Chọn phần kiến thức bạn muốn làm chủ hôm nay.</p><div className="topic-list">{categories.map((c) => { const set = questions.filter(q => q.category === c.name); const done = set.filter(q => store.stats[q.id]).length; return <button key={c.name} onClick={() => startQuiz(set)}><span className="topic-icon large" style={{background:c.bg,color:c.color}}><CategoryIcon name={c.name} size={30}/></span><span><b>{c.name}</b><small>{set.length} câu · {done} đã học</small></span><span className="progress-bar"><i style={{width:`${done/set.length*100}%`,background:c.color}}/></span><ChevronRight/></button>})}</div></div>; }
+function TopicsView({ store, startQuiz }: { store: Store; startQuiz: (q: Question[]) => void }) {
+  const [query, setQuery] = useState("");
+  const searchTerm = normalizeSearchText(query).replace(/^cau\s*/, "");
+  const results = searchTerm ? questions.filter(q =>
+    String(q.id).includes(searchTerm) ||
+    normalizeSearchText(q.question).includes(searchTerm) ||
+    q.answers.some(answer => normalizeSearchText(answer).includes(searchTerm))
+  ) : [];
+  const visibleResults = results.slice(0, 20);
 
-function SavedView({ store, startQuiz }: { store: Store; startQuiz: (q: Question[]) => void }) { const saved = questions.filter(q => store.saved.includes(q.id)); return <div className="page inner-page"><span className="eyebrow"><Bookmark size={15}/> BỘ SƯU TẬP</span><h1>Câu hỏi đã lưu</h1><p className="lead">Giữ lại những câu quan trọng để quay lại bất cứ lúc nào.</p>{saved.length ? <div className="saved-list">{saved.map(q => <div key={q.id}><span>Câu {q.id}</span><b>{q.question}</b><small>{q.category}</small></div>)}<button className="primary" onClick={() => startQuiz(saved)}><Play size={17}/> Ôn {saved.length} câu đã lưu</button></div> : <Empty icon={<Bookmark size={35}/>} title="Chưa có câu hỏi nào" copy="Nhấn biểu tượng lưu trong khi học để tạo bộ ôn tập riêng của bạn." />}</div>; }
+  return <div className="page inner-page">
+    <span className="eyebrow"><BookOpen size={15}/> HỌC CÓ HỆ THỐNG</span>
+    <h1>Học theo chủ đề</h1>
+    <p className="lead">Chọn một trong 6 chương của bộ 600 câu hỏi, hoặc tìm câu cụ thể.</p>
+    <div className="question-search-box">
+      <label htmlFor="question-search">Tìm trong 600 câu hỏi</label>
+      <div className="question-search">
+        <Search size={18} aria-hidden="true" />
+        <input id="question-search" type="text" inputMode="search" value={query} onChange={event => setQuery(event.target.value)} placeholder="Số câu, nội dung hoặc đáp án" autoComplete="off" />
+        <button type="button" aria-label="Xóa nội dung tìm kiếm" disabled={!query} onClick={() => setQuery("")}><X size={17}/></button>
+      </div>
+    </div>
+    {searchTerm ? <>
+      <p className="search-status" role="status">{results.length ? `${results.length} câu phù hợp${results.length > visibleResults.length ? ` · đang hiển thị ${visibleResults.length} câu đầu` : ""}` : "Không tìm thấy câu phù hợp. Thử số câu hoặc từ khóa khác."}</p>
+      {visibleResults.length > 0 && <ul className="question-search-results">{visibleResults.map(q => <li key={q.id}><button className="question-search-result" type="button" onClick={() => startQuiz([q])} aria-label={`Mở luyện tập câu ${q.id}: ${q.question}`}><span>Câu {q.id} · {q.category}</span><b>{q.question}</b><small>Mở câu hỏi <ArrowRight size={14}/></small></button></li>)}</ul>}
+    </> : <div className="topic-list">{categories.map((c) => {
+      const set = questions.filter(q => q.category === c.name);
+      const done = set.filter(q => store.stats[q.id]).length;
+      return <button key={c.name} onClick={() => startQuiz(set)}><span className="topic-icon large" style={{background:c.bg,color:c.color}}><CategoryIcon name={c.name} size={30}/></span><span><b>{c.name}</b><small>{set.length} câu · {done} đã học</small></span><span className="progress-bar" role="progressbar" aria-label={`Tiến độ học ${c.name}`} aria-valuemin={0} aria-valuemax={set.length} aria-valuenow={done}><i style={{width:`${done/set.length*100}%`,background:c.color}}/></span><ChevronRight/></button>;
+    })}</div>}
+  </div>;
+}
 
-function ProgressView({ store, accuracy, attempted, streak }: { store: Store; accuracy: number; attempted: number; streak: number }) { return <div className="page inner-page"><span className="eyebrow"><BarChart3 size={15}/> NHÌN LẠI HÀNH TRÌNH</span><h1>Tiến độ của bạn</h1><p className="lead">Hiểu điểm mạnh, nhận ra phần cần ôn và tiến lên theo nhịp của riêng bạn.</p><div className="progress-hero"><div><span>Mức độ bao phủ</span><b>{Math.round(attempted/questions.length*100)}%</b><small>{attempted}/{questions.length} câu minh họa đã học</small></div><div><span>Độ chính xác</span><b>{accuracy}%</b><small>trên tất cả lượt trả lời</small></div><div><span>Chuỗi học</span><b>{streak} ngày</b><small>chỉ để ghi nhận, không áp mục tiêu</small></div></div><h2 className="subheading">Theo từng chủ đề</h2><div className="category-progress">{categories.map(c => { const set=questions.filter(q=>q.category===c.name); const attempts=set.reduce((n,q)=>n+(store.stats[q.id]?.attempts||0),0); const correct=set.reduce((n,q)=>n+(store.stats[q.id]?.correct||0),0); const value=attempts?Math.round(correct/attempts*100):0; return <div key={c.name}><span className="topic-icon" style={{background:c.bg,color:c.color}}><CategoryIcon name={c.name}/></span><span><b>{c.name}</b><span className="progress-bar"><i style={{width:`${value}%`,background:c.color}}/></span></span><strong>{value}%</strong></div>})}</div></div>; }
+function SavedView({ store, startQuiz, toggleSaved }: { store: Store; startQuiz: (q: Question[]) => void; toggleSaved: (id: number) => void }) {
+  const saved = questions.filter(q => store.saved.includes(q.id));
+  return <div className="page inner-page">
+    <span className="eyebrow"><Bookmark size={15}/> BỘ SƯU TẬP</span>
+    <h1>Câu hỏi đã lưu</h1>
+    <p className="lead">Giữ lại những câu quan trọng để quay lại bất cứ lúc nào.</p>
+    {saved.length ? <div className="saved-list">
+      {saved.map(q => <div className="saved-question" key={q.id}>
+        <div className="saved-question-copy"><span>Câu {q.id}</span><b>{q.question}</b><small>{q.category}</small></div>
+        <div className="saved-actions">
+          <button className="saved-action study" type="button" aria-label={`Ôn riêng câu ${q.id}`} onClick={() => startQuiz([q])}><Play size={15}/> Ôn câu</button>
+          <button className="saved-action remove" type="button" aria-label={`Bỏ lưu câu ${q.id}`} onClick={() => toggleSaved(q.id)}><BookmarkCheck size={15}/> Bỏ lưu</button>
+        </div>
+      </div>)}
+      <button className="primary" onClick={() => startQuiz(saved)}><Play size={17}/> Ôn {saved.length} câu đã lưu</button>
+    </div> : <Empty icon={<Bookmark size={35}/>} title="Chưa có câu hỏi nào" copy="Nhấn biểu tượng lưu trong khi học để tạo bộ ôn tập riêng của bạn." />}
+  </div>;
+}
+
+function ProgressView({ store, accuracy, attempted, streak }: { store: Store; accuracy: number; attempted: number; streak: number }) {
+  return <div className="page inner-page">
+    <span className="eyebrow"><BarChart3 size={15}/> NHÌN LẠI HÀNH TRÌNH</span>
+    <h1>Tiến độ của bạn</h1>
+    <p className="lead">Hiểu điểm mạnh, nhận ra phần cần ôn và tiến lên theo nhịp của riêng bạn.</p>
+    <div className="progress-hero">
+      <div><span>Mức độ bao phủ</span><b>{Math.round(attempted/questions.length*100)}%</b><small>{attempted}/{questions.length} câu đã học</small></div>
+      <div><span>Độ chính xác</span><b>{attempted ? `${accuracy}%` : "—"}</b><small>{attempted ? "trên tất cả lượt trả lời" : "Chưa có lượt trả lời"}</small></div>
+      <div><span>Chuỗi học</span><b>{streak} ngày</b><small>chỉ để ghi nhận, không áp mục tiêu</small></div>
+    </div>
+    <h2 className="subheading">Theo từng chủ đề</h2>
+    <div className="category-progress">{categories.map(c => {
+      const set=questions.filter(q=>q.category===c.name);
+      const attempts=set.reduce((n,q)=>n+(store.stats[q.id]?.attempts||0),0);
+      const correct=set.reduce((n,q)=>n+(store.stats[q.id]?.correct||0),0);
+      const value=attempts?Math.round(correct/attempts*100):0;
+      return <div key={c.name}>
+        <span className="topic-icon" style={{background:c.bg,color:c.color}}><CategoryIcon name={c.name}/></span>
+        <span><b>{c.name}</b><span className="progress-bar" role="progressbar" aria-label={`Độ chính xác ${c.name}`} aria-valuemin={0} aria-valuemax={100} aria-valuenow={attempts ? value : undefined} aria-valuetext={attempts ? `${value}% chính xác` : "Chưa có dữ liệu"}><i style={{width:`${value}%`,background:c.color}}/></span></span>
+        <strong>{attempts ? `${value}%` : "—"}</strong>
+      </div>;
+    })}</div>
+  </div>;
+}
 
 function QuizView({ question, index, total, selected, setSelected, revealed, submitAnswer, nextQuestion, saved, toggleSaved, mode, timeLeft, quit }: { question: Question; index:number; total:number; selected:number|null; setSelected:(n:number)=>void; revealed:boolean; submitAnswer:()=>void; nextQuestion:()=>void; saved:number[]; toggleSaved:(id:number)=>void; mode:"learn"|"test"; timeLeft:number; quit:()=>void }) {
   const mins = Math.floor(timeLeft/60).toString().padStart(2,"0"), secs=(timeLeft%60).toString().padStart(2,"0");
-  return <div className="quiz-page"><div className="quiz-top"><button onClick={quit}><ArrowLeft size={19}/> Thoát</button><div><span>{mode === "test" ? "Thi thử hạng B" : "Luyện tập"}</span><div className="quiz-progress"><i style={{width:`${(index+1)/total*100}%`}}/></div></div>{mode === "test" ? <span className="timer"><Clock3 size={17}/>{mins}:{secs}</span> : <span>{index+1}/{total}</span>}</div><article className="question-card"><div className="question-meta"><span>{question.category}</span>{question.critical && <em><CircleAlert size={15}/> Câu điểm liệt</em>}<button aria-label={saved.includes(question.id)?"Bỏ lưu câu hỏi":"Lưu câu hỏi"} onClick={() => toggleSaved(question.id)}>{saved.includes(question.id)?<BookmarkCheck fill="currentColor"/>:<Bookmark/>}</button></div><p className="question-number">CÂU {index+1} / {total}</p><h1>{question.question}</h1><div className="answers">{question.answers.map((a,i) => { const state = revealed ? i===question.correct ? "correct" : i===selected ? "wrong" : "" : selected===i ? "selected" : ""; return <button disabled={revealed} className={state} key={a} onClick={() => setSelected(i)}><span>{String.fromCharCode(65+i)}</span><b>{a}</b>{revealed && i===question.correct && <Check/>}{revealed && i===selected && i!==question.correct && <X/>}</button>})}</div>{revealed && <div className="explanation"><span><Sparkles size={18}/></span><div><b>Giải thích</b><p>{question.explanation}</p></div></div>}<div className="quiz-actions">{!revealed ? <button className="primary" disabled={selected===null} onClick={submitAnswer}>Kiểm tra đáp án</button> : <button className="primary" onClick={nextQuestion}>{index===total-1?"Xem kết quả":"Câu tiếp theo"}<ArrowRight size={17}/></button>}</div></article></div>;
+  return <div className="quiz-page">
+    <div className="quiz-top">
+      <button onClick={quit}><ArrowLeft size={19}/> Thoát</button>
+      <div><span>{mode === "test" ? "Thi thử hạng B" : "Luyện tập"}</span><div className="quiz-progress" role="progressbar" aria-label="Tiến độ câu hỏi" aria-valuemin={1} aria-valuemax={total} aria-valuenow={index + 1}><i style={{width:`${(index+1)/total*100}%`}}/></div></div>
+      {mode === "test" ? <span className="timer" aria-label={`Thời gian còn lại ${mins} phút ${secs} giây`}><Clock3 size={17}/>{mins}:{secs}</span> : <span aria-label={`Câu ${index + 1} trên ${total}`}>{index+1}/{total}</span>}
+    </div>
+    <article className="question-card">
+      <div className="question-meta"><span>{question.category}</span>{question.critical && <em><CircleAlert size={15}/> Câu điểm liệt</em>}<button aria-label={saved.includes(question.id)?"Bỏ lưu câu hỏi":"Lưu câu hỏi"} onClick={() => toggleSaved(question.id)}>{saved.includes(question.id)?<BookmarkCheck fill="currentColor"/>:<Bookmark/>}</button></div>
+      <p className="question-number">CÂU {question.id} · {index+1} / {total}</p>
+      <h1>{question.question}</h1>
+      {question.images.length > 0 && <div className="question-images">{question.images.map((image, imageIndex) => <Image key={image.src} src={image.src} alt={`Hình minh họa câu ${question.id}${question.images.length > 1 ? `, hình ${imageIndex + 1}` : ""}`} width={image.width} height={image.height} className="question-image" unoptimized />)}</div>}
+      <div className="answers">{question.answers.map((a,i) => {
+        const state = revealed ? i===question.correct ? "correct" : i===selected ? "wrong" : "" : selected===i ? "selected" : "";
+        const status = revealed ? i===question.correct ? " — Đáp án đúng" : i===selected ? " — Bạn đã chọn đáp án này" : "" : "";
+        return <button key={`${question.id}-${i}`} type="button" aria-pressed={selected===i} aria-label={`${String.fromCharCode(65+i)}. ${a}${status}`} disabled={revealed} className={state} onClick={() => setSelected(i)}><span>{String.fromCharCode(65+i)}</span><b>{a}</b>{revealed && i===question.correct && <Check aria-hidden="true"/>}{revealed && i===selected && i!==question.correct && <X aria-hidden="true"/>}</button>;
+      })}</div>
+      {revealed && question.explanation && <div className="explanation" role="status" aria-live="polite"><span><Sparkles size={18}/></span><div><b>Lý giải cho đáp án đúng</b><p style={{ whiteSpace: "pre-line" }}>{question.explanation}</p>{question.id === 260 && <p className="evidence-note">Phần lý giải này là nội dung bổ sung, không phải trích dẫn pháp luật. Vui lòng xem các lưu ý kỹ thuật trong nguồn bên dưới.</p>}</div></div>}
+      {revealed && <section className="evidence-block" aria-label="Nguồn và căn cứ"><h2>Nguồn và căn cứ</h2>{question.evidence.map((item, itemIndex) => <div className="evidence-item" key={`${item.kind}-${item.citation}-${itemIndex}`}><EvidenceKindLabel kind={item.kind}/><b>{item.title}</b><blockquote lang="vi">“{item.quote}”</blockquote><a href={item.url} target="_blank" rel="noreferrer">{item.citation} · Mở tài liệu gốc</a></div>)}{!question.evidence.some((item) => item.kind === "law") && <p className="evidence-note">Chưa tìm thấy trích dẫn pháp luật hoặc kỹ thuật trực tiếp xác nhận thao tác trong đáp án. Trích dẫn bộ đề chỉ xác nhận khóa đáp án, không tự nó thay thế căn cứ pháp lý.</p>}</section>}
+      <div className="quiz-actions">{!revealed ? <button className="primary" disabled={selected===null} onClick={submitAnswer}>Kiểm tra đáp án</button> : <button className="primary" onClick={nextQuestion}>{index===total-1?"Xem kết quả":"Câu tiếp theo"}<ArrowRight size={17}/></button>}</div>
+    </article>
+  </div>;
 }
 
-function ResultView({ score,total,mode,retry,home }: {score:number;total:number;mode:"learn"|"test";retry:()=>void;home:()=>void}) { const pct=Math.round(score/total*100); return <div className="page result-page"><div className="result-badge"><Trophy size={44}/></div><span className="eyebrow">HOÀN THÀNH</span><h1>{pct>=80?"Làm tốt lắm!":"Thêm một lần luyện là thêm vững vàng"}</h1><p>Bạn trả lời đúng <b>{score}/{total}</b> câu trong {mode === "test" ? "bài thi thử" : "lượt học này"}.</p><div className="score-ring" style={{"--score":`${pct*3.6}deg`} as React.CSSProperties}><span><b>{pct}%</b><small>chính xác</small></span></div><div className="result-actions"><button className="secondary" onClick={home}><Home size={17}/> Về trang chủ</button><button className="primary" onClick={retry}><RotateCcw size={17}/> Làm lại</button></div></div>; }
+function ResultView({ score, total, mode, criticalMissed, misses, reviewMisses, retry, home }: { score: number; total: number; mode: "learn" | "test"; criticalMissed: boolean; misses: Question[]; reviewMisses: () => void; retry: () => void; home: () => void }) {
+  const pct = Math.round(score / total * 100);
+  const passed = mode === "learn" || (score >= 45 && !criticalMissed);
+  return <div className="page result-page">
+    <div className="result-badge"><Trophy size={44} /></div>
+    <span className="eyebrow">{mode === "test" ? (passed ? "ĐẠT" : "CHƯA ĐẠT") : "HOÀN THÀNH"}</span>
+    <h1>{mode === "test" ? (passed ? "Bạn đã đạt bài thi thử." : "Hãy ôn thêm trước khi thi.") : pct >= 80 ? "Làm tốt lắm!" : "Thêm một lần luyện là thêm vững vàng"}</h1>
+    <p>Bạn trả lời đúng <b>{score}/{total}</b> câu trong {mode === "test" ? "bài thi thử" : "lượt học này"}.{criticalMissed ? " Bạn đã sai câu điểm liệt nên không đạt." : mode === "test" && score < 45 ? " Cần đạt ít nhất 45/50 câu." : ""}</p>
+    <div className="score-ring" style={{ "--score": `${pct * 3.6}deg` } as React.CSSProperties}><span><b>{pct}%</b><small>chính xác</small></span></div>
+    <div className="result-actions">
+      {misses.length > 0 && <button className="primary" onClick={reviewMisses}><BookOpen size={17} /> Ôn lại {misses.length} câu sai</button>}
+      <button className="secondary" onClick={home}><Home size={17} /> Về trang chủ</button>
+      <button className={misses.length > 0 ? "secondary" : "primary"} onClick={retry}><RotateCcw size={17} /> Làm lại</button>
+    </div>
+  </div>;
+}
 
 function Empty({icon,title,copy}:{icon:React.ReactNode;title:string;copy:string}) { return <div className="empty"><span>{icon}</span><h2>{title}</h2><p>{copy}</p></div>; }
