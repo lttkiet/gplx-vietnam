@@ -21,3 +21,25 @@ button:focus-visible,a:focus-visible,.saved-action:focus-visible,.skip-link:focu
 .logo small,.streak-pill small,.topic-info em,.source-note,.score-ring small{font-size:10px}.eyebrow,.section-kicker,.mini-label{font-size:11px}.stat-card span,.stat-card b small,.topic-info small,.topic-list small,.saved-list>div small,.review-card p,.exam-card p,.review-card button,.exam-card button,.progress-hero span,.progress-hero small,.question-meta>span,.question-meta em,.question-number,.mobile-nav button,.evidence-kind,.question-search-result>span{font-size:11px}.saved-list>div span,.category-progress b,.category-progress strong,.quiz-top>button,.quiz-top>div>span,.quiz-top>span,.saved-action,.question-search-result>small{font-size:12px}.answers button b{font-size:14px}.explanation b,.explanation p,.evidence-note{font-size:12px}.evidence-item>b{font-size:13px}.evidence-item blockquote{font-size:13px}.evidence-item a{font-size:12px}
 .quiz-top>button{min-height:44px;padding:0 8px}.question-meta button{width:44px;height:44px}.saved-action{min-height:44px}.question-search>button{width:44px;height:44px}
 .logo-label{font-size:12px;font-weight:700;color:var(--ink);white-space:nowrap}
+.simple-home{max-width:920px;padding-top:64px}
+.simple-intro{display:flex;align-items:flex-end;justify-content:space-between;gap:24px;margin-bottom:24px}
+.simple-intro h1{font:700 34px/1.15 var(--font-display),sans-serif;letter-spacing:-.025em;margin:9px 0 7px}
+.simple-intro p{margin:0;color:var(--muted);font-size:14px}
+.simple-intro>.primary{min-height:48px;flex:0 0 auto}
+.simple-summary{display:grid;grid-template-columns:repeat(3,1fr);overflow:hidden;border:1px solid var(--line);border-radius:16px;background:#fff}
+.simple-summary>div{display:grid;gap:7px;padding:18px 22px}
+.simple-summary>div+div{border-left:1px solid var(--line)}
+.simple-summary span{font-size:11px;color:var(--muted)}
+.simple-summary b{font:700 22px/1.2 var(--font-display),sans-serif;color:var(--ink)}
+.simple-summary small{font:500 12px var(--font-body),sans-serif;color:var(--muted)}
+.simple-actions{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:12px;margin-top:16px}
+.simple-action{min-height:92px;display:grid;grid-template-columns:auto 1fr auto;align-items:center;gap:12px;padding:16px;border:1px solid var(--line);border-radius:14px;background:#fff;text-align:left;cursor:pointer;transition:border-color .18s,transform .18s}
+.simple-action:hover:not(:disabled){border-color:#d5a89b;transform:translateY(-1px)}
+.simple-action>svg:first-child{color:var(--coral-dark)}
+.simple-action>svg:last-child{color:var(--muted)}
+.simple-action>span{display:grid;gap:5px;min-width:0}
+.simple-action b{font-size:12px}
+.simple-action small{font-size:10px;line-height:1.4;color:var(--muted)}
+.simple-action:disabled{opacity:.58;cursor:not-allowed}
+@media(max-width:800px){.simple-actions{grid-template-columns:1fr}.simple-action{min-height:72px}}
+@media(max-width:600px){.simple-home{padding:32px 18px 90px}.simple-intro{align-items:stretch;flex-direction:column;gap:16px}.simple-intro h1{font-size:29px}.simple-summary>div{padding:14px 12px;gap:5px}.simple-summary span{font-size:10px}.simple-summary b{font-size:18px}.simple-summary small{font-size:10px}.simple-actions{gap:9px}}

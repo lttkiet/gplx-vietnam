@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { ArrowLeft, ArrowRight, BarChart3, BookOpen, Bookmark, BookmarkCheck, CarFront, Check, ChevronRight, CircleAlert, Clock3, Flame, HardDrive, Heart, Home, Map, Play, RotateCcw, Search, Signpost, Sparkles, Target, Timer, Trophy, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, BarChart3, BookOpen, Bookmark, BookmarkCheck, CarFront, Check, ChevronRight, CircleAlert, Clock3, Heart, Home, Map, Play, RotateCcw, Search, Signpost, Sparkles, Timer, Trophy, X } from "lucide-react";
 import { categories, Category, Question, questions } from "@/lib/questions";
 
 type View = "home" | "topics" | "quiz" | "saved" | "progress" | "result";
@@ -121,9 +121,9 @@ export function DrivingApp() {
 
   return <div className="app-shell">
     <a className="skip-link" href="#main-content">Bỏ qua điều hướng</a>
-    <header><div className="header-inner"><button className="brand-button" onClick={() => navigate("home")}><Logo /></button><nav aria-label="Điều hướng chính">{navItems.map(({ view: itemView, label }) => <button key={itemView} aria-current={view === itemView ? "page" : undefined} className={view === itemView ? "active" : ""} onClick={() => navigate(itemView)}>{label}</button>)}</nav><div className="profile-button" style={{ cursor: "default" }} role="note" aria-label="Dùng cá nhân. Tiến độ lưu trên thiết bị này."><span><HardDrive size={17} /></span><span className="profile-copy" style={{ display: "block" }}>Dùng cá nhân<small>Lưu trên thiết bị</small></span></div></div></header>
+    <header><div className="header-inner"><button className="brand-button" onClick={() => navigate("home")}><Logo /></button><nav aria-label="Điều hướng chính">{navItems.map(({ view: itemView, label }) => <button key={itemView} aria-current={view === itemView ? "page" : undefined} className={view === itemView ? "active" : ""} onClick={() => navigate(itemView)}>{label}</button>)}</nav></div></header>
     <main id="main-content" tabIndex={-1}>
-      {view === "home" && <HomeView attempted={attempted} accuracy={accuracy} streak={streak} store={store} startQuiz={startQuiz} startQuickPractice={() => startQuiz(sampleQuestions(questions, 10))} navigate={navigate} />}
+      {view === "home" && <HomeView attempted={attempted} accuracy={accuracy} store={store} startQuiz={startQuiz} startQuickPractice={() => startQuiz(sampleQuestions(questions, 10))} navigate={navigate} />}
       {view === "topics" && <TopicsView store={store} startQuiz={startQuiz} />}
       {view === "saved" && <SavedView store={store} startQuiz={startQuiz} toggleSaved={toggleSaved} />}
       {view === "progress" && <ProgressView store={store} accuracy={accuracy} attempted={attempted} streak={streak} />}
@@ -134,17 +134,23 @@ export function DrivingApp() {
   </div>;
 }
 
-function HomeView({ attempted, accuracy, streak, store, startQuiz, startQuickPractice, navigate }: { attempted: number; accuracy: number; streak: number; store: Store; startQuiz: (q?: Question[], m?: "learn" | "test") => void; startQuickPractice: () => void; navigate: (v: View) => void }) {
+function HomeView({ attempted, accuracy, store, startQuiz, startQuickPractice, navigate }: { attempted: number; accuracy: number; store: Store; startQuiz: (q?: Question[], m?: "learn" | "test") => void; startQuickPractice: () => void; navigate: (v: View) => void }) {
   const weak = questions.filter((q) => store.stats[q.id] && store.stats[q.id].correct < store.stats[q.id].attempts);
-  return <div className="page home-page">
-    <section className="welcome-row"><div><span className="eyebrow"><Sparkles size={15} /> SẴN SÀNG CHINH PHỤC</span><h1>Chào bạn, cùng vững tay lái nhé!</h1><p>Học theo nhịp của bạn — tiến độ được lưu trên thiết bị này.</p></div><div className="streak-pill"><Flame size={24} fill="currentColor" /><span><b>{streak}</b><small>ngày liên tiếp</small></span></div></section>
-    <section className="hero-card">
-      <div className="hero-copy"><span className="mini-label"><Target size={14} /> Gợi ý cho bạn</span><h2>{attempted ? "Luyện thêm một lượt" : "Bắt đầu với 10 câu ngẫu nhiên"}</h2><p>{attempted ? `Bạn đã khám phá ${attempted} câu hỏi. Mỗi lượt ôn gồm 10 câu — học theo nhịp của bạn.` : "Luyện một lượt 10 câu từ bộ đề 600 câu, hoặc tự chọn chủ đề bạn muốn ôn."}</p><div className="hero-actions"><button className="primary" onClick={startQuickPractice}><Play size={18} fill="currentColor" /> Luyện 10 câu</button><button className="text-button" onClick={() => navigate("topics")}>Chọn chủ đề <ArrowRight size={16} /></button></div></div>
-      <div className="road-illustration" aria-hidden="true"><div className="sun"/><div className="cloud one"/><div className="cloud two"/><div className="hills"/><div className="road"><span/><span/><span/></div><div className="mini-car"><CarFront size={38}/></div><div className="road-sign">50</div></div>
+  return <div className="page home-page simple-home">
+    <section className="simple-intro">
+      <div><span className="eyebrow"><BookOpen size={15} /> ÔN TẬP LÝ THUYẾT</span><h1>Học theo nhịp của bạn</h1><p>600 câu hỏi · Tiến độ được lưu trên thiết bị này.</p></div>
+      <button className="primary" onClick={startQuickPractice}><Play size={18} fill="currentColor" /> Luyện 10 câu</button>
     </section>
-    <section className="stats-grid" aria-label="Tóm tắt tiến độ"><div className="stat-card"><span className="stat-icon coral"><BookOpen /></span><div><span>Đã học</span><b>{attempted}<small> / 600 câu</small></b></div></div><div className="stat-card"><span className="stat-icon green"><Target /></span><div><span>Độ chính xác</span><b>{attempted ? accuracy : "—"}<small>{attempted ? "%" : ""}</small></b></div></div><div className="stat-card"><span className="stat-icon yellow"><Trophy /></span><div><span>Thi thử gần nhất</span><b>{store.testHistory.length ? `${store.testHistory.at(-1)}/50` : "—"}</b></div></div></section>
-    <section className="section-block"><div className="section-head"><div><span className="section-kicker">ĐỦ 6 CHƯƠNG · 600 CÂU</span><h2>Khám phá từng chủ đề</h2></div><button onClick={() => navigate("topics")}>Xem tất cả <ChevronRight size={17}/></button></div><div className="topic-grid">{categories.map((c) => { const set = questions.filter(q => q.category === c.name); const done = set.filter(q => store.stats[q.id]).length; return <button className="topic-card" key={c.name} onClick={() => startQuiz(set)}><span className="topic-icon" style={{ background: c.bg, color: c.color }}><CategoryIcon name={c.name} size={26}/></span><span className="topic-info"><b>{c.name}</b><small>{set.length} câu</small><span className="progress-bar" role="progressbar" aria-label={`Tiến độ học ${c.name}`} aria-valuemin={0} aria-valuemax={set.length} aria-valuenow={done}><i style={{ width: `${set.length ? done / set.length * 100 : 0}%`, background: c.color }}/></span><em>{done} đã học</em></span><ChevronRight size={19}/></button>})}</div></section>
-    <section className="bottom-grid"><div className="review-card"><div className="review-icon"><CircleAlert size={25}/></div><div><span className="section-kicker">ÔN TẬP THÔNG MINH</span><h3>Câu cần xem lại</h3><p>{weak.length ? `Có ${weak.length} câu bạn từng trả lời chưa đúng.` : "Những câu trả lời sai sẽ xuất hiện ở đây để bạn ôn lại."}</p></div><button disabled={!weak.length} onClick={() => startQuiz(weak)}>Ôn ngay <ArrowRight size={16}/></button></div><div className="exam-card"><div><span className="section-kicker light">MÔ PHỎNG KỲ THI</span><h3>Thi thử hạng B</h3><p>50 câu · 33 phút · Sai câu điểm liệt là không đạt</p></div><button onClick={() => startQuiz(questions, "test")}><Timer size={18}/> Bắt đầu thi</button></div></section>
+    <section className="simple-summary" aria-label="Tóm tắt tiến độ">
+      <div><span>Đã học</span><b>{attempted}<small> / 600</small></b></div>
+      <div><span>Độ chính xác</span><b>{attempted ? `${accuracy}%` : "—"}</b></div>
+      <div><span>Thi thử gần nhất</span><b>{store.testHistory.length ? `${store.testHistory.at(-1)}/50` : "—"}</b></div>
+    </section>
+    <section className="simple-actions" aria-label="Lối tắt học tập">
+      <button className="simple-action" type="button" onClick={() => navigate("topics")}><BookOpen size={20}/><span><b>Chọn chủ đề</b><small>Học theo 6 chương</small></span><ArrowRight size={17}/></button>
+      <button className="simple-action" type="button" disabled={!weak.length} onClick={() => startQuiz(weak)}><CircleAlert size={20}/><span><b>Ôn câu sai</b><small>{weak.length ? `${weak.length} câu cần xem lại` : "Các câu trả lời sai sẽ hiện ở đây"}</small></span><ArrowRight size={17}/></button>
+      <button className="simple-action" type="button" onClick={() => startQuiz(questions, "test")}><Timer size={20}/><span><b>Thi thử hạng B</b><small>50 câu · 33 phút</small></span><ArrowRight size={17}/></button>
+    </section>
     <p className="source-note">600 câu hỏi theo bộ Cục Cảnh sát giao thông, Bộ Công an ban hành năm 2025. <a href="https://xaydungchinhsach.chinhphu.vn/huong-dan-su-dung-bo-600-cau-hoi-dung-de-sat-hach-lai-xe-co-gioi-duong-bo-119250513110514585.htm" target="_blank" rel="noreferrer">Xem nguồn chính thức</a></p>
   </div>;
 }
