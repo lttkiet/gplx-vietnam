@@ -84,7 +84,7 @@ export function DrivingApp() {
     return n;
   }, [store.activityDays]);
 
-  function navigate(next: View) { setView(next); window.scrollTo({ top: 0, behavior: "smooth" }); }
+  function navigate(next: View) { setView(next); window.scrollTo({ top: 0, behavior: "smooth" }); setTimeout(() => document.getElementById("main-content")?.focus({ preventScroll: true }), 0); }
   function startQuiz(pool = questions, mode: "learn" | "test" = "learn") {
     let list = pool;
     if (mode === "test") {
@@ -241,6 +241,23 @@ function ProgressView({ store, accuracy, attempted, streak }: { store: Store; ac
 }
 
 function QuizView({ question, index, total, selected, setSelected, revealed, submitAnswer, nextQuestion, saved, toggleSaved, mode, timeLeft, quit }: { question: Question; index:number; total:number; selected:number|null; setSelected:(n:number)=>void; revealed:boolean; submitAnswer:()=>void; nextQuestion:()=>void; saved:number[]; toggleSaved:(id:number)=>void; mode:"learn"|"test"; timeLeft:number; quit:()=>void }) {
+  useEffect(() => {
+    function handleKeyDown(e: KeyboardEvent) {
+      if (e.ctrlKey || e.altKey || e.metaKey) return;
+      const key = e.key.toLowerCase();
+      if (['1', 'a'].includes(key)) setSelected(0);
+      else if (['2', 'b'].includes(key)) setSelected(1);
+      else if (['3', 'c'].includes(key)) setSelected(2);
+      else if (['4', 'd'].includes(key)) setSelected(3);
+      else if (key === 'enter') {
+        if (!revealed && selected !== null) submitAnswer();
+        else if (revealed) nextQuestion();
+      }
+    }
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [revealed, selected, submitAnswer, nextQuestion, setSelected]);
+
   const mins = Math.floor(timeLeft/60).toString().padStart(2,"0"), secs=(timeLeft%60).toString().padStart(2,"0");
   return <div className="quiz-page">
     <div className="quiz-top">
