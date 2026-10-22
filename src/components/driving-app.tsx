@@ -2,7 +2,7 @@
 
 import { useEffect, useMemo, useState } from "react";
 import Image from "next/image";
-import { ArrowLeft, ArrowRight, BarChart3, BookOpen, Bookmark, BookmarkCheck, CarFront, Check, ChevronRight, CircleAlert, Clock3, Heart, Home, Map, Play, RotateCcw, Search, Signpost, Sparkles, Timer, Trophy, X } from "lucide-react";
+import { ArrowLeft, ArrowRight, BarChart3, BookOpen, Bookmark, BookmarkCheck, CarFront, Check, ChevronLeft, ChevronRight, CircleAlert, Clock3, Heart, Home, Map, Play, RotateCcw, Search, Signpost, Sparkles, Timer, Trophy, X } from "lucide-react";
 import { categories, Category, Question, questions } from "@/lib/questions";
 
 type View = "home" | "topics" | "quiz" | "saved" | "progress" | "result";
@@ -85,14 +85,24 @@ export function DrivingApp() {
   }, [store.activityDays]);
 
   function navigate(next: View) { setView(next); window.scrollTo({ top: 0, behavior: "smooth" }); setTimeout(() => document.getElementById("main-content")?.focus({ preventScroll: true }), 0); }
-  function startQuiz(pool = questions, mode: "learn" | "test" = "learn") {
+  function startQuiz(pool = questions, mode: "learn" | "test" = "learn", startIndex = 0) {
     let list = pool;
+    let idx = startIndex;
+    if (mode === "learn" && pool.length === 1) {
+      const q = pool[0];
+      const fullIdx = questions.findIndex((item) => item.id === q.id);
+      if (fullIdx !== -1) {
+        list = questions;
+        idx = fullIdx;
+      }
+    }
     if (mode === "test") {
       const critical = sampleQuestions(questions.filter((q) => q.critical), 1)[0];
       const regular = sampleQuestions(pool.filter((q) => !q.critical), 49);
       list = sampleQuestions([...regular, ...(critical ? [critical] : [])], 50);
+      idx = 0;
     }
-    setQuiz(list); setSessionMisses([]); setQuizIndex(0); setSelected(null); setRevealed(false); setScore(0); setCriticalMissed(false); setQuizMode(mode); setTimeLeft(mode === "test" ? 33 * 60 : 0); navigate("quiz");
+    setQuiz(list); setSessionMisses([]); setQuizIndex(idx); setSelected(null); setRevealed(false); setScore(0); setCriticalMissed(false); setQuizMode(mode); setTimeLeft(mode === "test" ? 33 * 60 : 0); navigate("quiz");
   }
   function submitAnswer() {
     if (selected === null || revealed) return;
@@ -102,6 +112,13 @@ export function DrivingApp() {
       if (q.critical && quizMode === "test") setCriticalMissed(true);
     }
     setStore((prev) => ({ ...prev, stats: { ...prev.stats, [q.id]: { attempts: (prev.stats[q.id]?.attempts ?? 0) + 1, correct: (prev.stats[q.id]?.correct ?? 0) + (ok ? 1 : 0) } }, activityDays: prev.activityDays.includes(getToday()) ? prev.activityDays : [...prev.activityDays, getToday()] }));
+  }
+  function previousQuestion() {
+    if (quizIndex > 0) {
+      setQuizIndex((i) => i - 1);
+      setSelected(null);
+      setRevealed(false);
+    }
   }
   function nextQuestion() { if (quizIndex === quiz.length - 1) finishQuiz(); else { setQuizIndex((i) => i + 1); setSelected(null); setRevealed(false); } }
   function finishQuiz() {
@@ -127,7 +144,7 @@ export function DrivingApp() {
       {view === "topics" && <TopicsView store={store} startQuiz={startQuiz} />}
       {view === "saved" && <SavedView store={store} startQuiz={startQuiz} toggleSaved={toggleSaved} />}
       {view === "progress" && <ProgressView store={store} accuracy={accuracy} attempted={attempted} streak={streak} />}
-      {view === "quiz" && quiz.length > 0 && <QuizView question={quiz[quizIndex]} index={quizIndex} total={quiz.length} selected={selected} setSelected={setSelected} revealed={revealed} submitAnswer={submitAnswer} nextQuestion={nextQuestion} saved={store.saved} toggleSaved={toggleSaved} mode={quizMode} timeLeft={timeLeft} quit={() => navigate("home")} />}
+      {view === "quiz" && quiz.length > 0 && <QuizView question={quiz[quizIndex]} index={quizIndex} total={quiz.length} selected={selected} setSelected={setSelected} revealed={revealed} submitAnswer={submitAnswer} nextQuestion={nextQuestion} previousQuestion={previousQuestion} saved={store.saved} toggleSaved={toggleSaved} mode={quizMode} timeLeft={timeLeft} quit={() => navigate("home")} />}
       {view === "result" && <ResultView score={score} total={quiz.length} mode={quizMode} criticalMissed={criticalMissed} misses={sessionMisses} reviewMisses={() => startQuiz(sessionMisses)} retry={() => startQuiz(quizMode === "test" ? questions : quiz, quizMode)} home={() => navigate("home")} />}
     </main>
     <nav className="mobile-nav" aria-label="Điều hướng chính">{navItems.map(({ view: itemView, label, icon: Icon }) => <button key={itemView} aria-current={view === itemView ? "page" : undefined} className={view === itemView ? "active" : ""} onClick={() => navigate(itemView)}><Icon size={20} /><span>{label}</span></button>)}</nav>
@@ -155,7 +172,7 @@ function HomeView({ attempted, accuracy, store, startQuiz, startQuickPractice, n
   </div>;
 }
 
-function TopicsView({ store, startQuiz }: { store: Store; startQuiz: (q: Question[]) => void }) {
+function TopicsView({ store, startQuiz }: { store: Store; startQuiz: (q?: Question[], mode?: "learn" | "test", startIndex?: number) => void }) {
   const [query, setQuery] = useState("");
   const [categoryFilter, setCategoryFilter] = useState<"all" | Category>("all");
   const [page, setPage] = useState(1);
@@ -191,22 +208,22 @@ function TopicsView({ store, startQuiz }: { store: Store; startQuiz: (q: Questio
       </select>
     </div>
     <p className="search-status" role="status" aria-live="polite">{results.length ? `Câu ${firstVisible}–${lastVisible} trong ${results.length} câu phù hợp` : "Không tìm thấy câu phù hợp. Thử số câu hoặc từ khóa khác."}</p>
-    {visibleResults.length > 0 && <ul className="question-search-results">{visibleResults.map(q => <li key={q.id}><button className="question-search-result" type="button" onClick={() => startQuiz([q])} aria-label={`Chọn và luyện tập câu ${q.id}: ${q.question}`}><span>Câu {q.id} · {q.category}</span><b>{q.question}</b><small>Luyện câu này <ArrowRight size={14}/></small></button></li>)}</ul>}
+    {visibleResults.length > 0 && <ul className="question-search-results">{visibleResults.map(q => <li key={q.id}><button className="question-search-result" type="button" onClick={() => startQuiz(results, "learn", results.findIndex((item) => item.id === q.id))} aria-label={`Chọn và luyện tập câu ${q.id}: ${q.question}`}><span>Câu {q.id} · {q.category}</span><b>{q.question}</b><small>Luyện câu này <ArrowRight size={14}/></small></button></li>)}</ul>}
     {pageCount > 1 && <nav className="question-pagination" aria-label="Phân trang câu hỏi"><button type="button" disabled={page === 1} onClick={() => setPage(current => current - 1)}><ArrowLeft size={16}/> Trước</button><span>Trang {page} / {pageCount}</span><button type="button" disabled={page === pageCount} onClick={() => setPage(current => current + 1)}>Tiếp <ArrowRight size={16}/></button></nav>}
   </div>;
 }
 
-function SavedView({ store, startQuiz, toggleSaved }: { store: Store; startQuiz: (q: Question[]) => void; toggleSaved: (id: number) => void }) {
+function SavedView({ store, startQuiz, toggleSaved }: { store: Store; startQuiz: (q?: Question[], mode?: "learn" | "test", startIndex?: number) => void; toggleSaved: (id: number) => void }) {
   const saved = questions.filter(q => store.saved.includes(q.id));
   return <div className="page inner-page">
     <span className="eyebrow"><Bookmark size={15}/> BỘ SƯU TẬP</span>
     <h1>Câu hỏi đã lưu</h1>
     <p className="lead">Giữ lại những câu quan trọng để quay lại bất cứ lúc nào.</p>
     {saved.length ? <div className="saved-list">
-      {saved.map(q => <div className="saved-question" key={q.id}>
+      {saved.map((q, idx) => <div className="saved-question" key={q.id}>
         <div className="saved-question-copy"><span>Câu {q.id}</span><b>{q.question}</b><small>{q.category}</small></div>
         <div className="saved-actions">
-          <button className="saved-action study" type="button" aria-label={`Ôn riêng câu ${q.id}`} onClick={() => startQuiz([q])}><Play size={15}/> Ôn câu</button>
+          <button className="saved-action study" type="button" aria-label={`Ôn riêng câu ${q.id}`} onClick={() => startQuiz(saved, "learn", idx)}><Play size={15}/> Ôn câu</button>
           <button className="saved-action remove" type="button" aria-label={`Bỏ lưu câu ${q.id}`} onClick={() => toggleSaved(q.id)}><BookmarkCheck size={15}/> Bỏ lưu</button>
         </div>
       </div>)}
@@ -240,7 +257,7 @@ function ProgressView({ store, accuracy, attempted, streak }: { store: Store; ac
   </div>;
 }
 
-function QuizView({ question, index, total, selected, setSelected, revealed, submitAnswer, nextQuestion, saved, toggleSaved, mode, timeLeft, quit }: { question: Question; index:number; total:number; selected:number|null; setSelected:(n:number)=>void; revealed:boolean; submitAnswer:()=>void; nextQuestion:()=>void; saved:number[]; toggleSaved:(id:number)=>void; mode:"learn"|"test"; timeLeft:number; quit:()=>void }) {
+function QuizView({ question, index, total, selected, setSelected, revealed, submitAnswer, nextQuestion, previousQuestion, saved, toggleSaved, mode, timeLeft, quit }: { question: Question; index:number; total:number; selected:number|null; setSelected:(n:number)=>void; revealed:boolean; submitAnswer:()=>void; nextQuestion:()=>void; previousQuestion:()=>void; saved:number[]; toggleSaved:(id:number)=>void; mode:"learn"|"test"; timeLeft:number; quit:()=>void }) {
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {
       if (e.ctrlKey || e.altKey || e.metaKey) return;
@@ -252,11 +269,15 @@ function QuizView({ question, index, total, selected, setSelected, revealed, sub
       else if (key === 'enter') {
         if (!revealed && selected !== null) submitAnswer();
         else if (revealed) nextQuestion();
+      } else if (e.key === 'ArrowLeft') {
+        previousQuestion();
+      } else if (e.key === 'ArrowRight') {
+        if (index < total - 1 || revealed) nextQuestion();
       }
     }
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [revealed, selected, submitAnswer, nextQuestion, setSelected]);
+  }, [revealed, selected, submitAnswer, nextQuestion, previousQuestion, index, total, setSelected]);
 
   const mins = Math.floor(timeLeft/60).toString().padStart(2,"0"), secs=(timeLeft%60).toString().padStart(2,"0");
   return <div className="quiz-page">
@@ -265,20 +286,60 @@ function QuizView({ question, index, total, selected, setSelected, revealed, sub
       <div><span>{mode === "test" ? "Thi thử hạng B" : "Luyện tập"}</span><div className="quiz-progress" role="progressbar" aria-label="Tiến độ câu hỏi" aria-valuemin={1} aria-valuemax={total} aria-valuenow={index + 1}><i style={{width:`${(index+1)/total*100}%`}}/></div></div>
       {mode === "test" ? <span className="timer" aria-label={`Thời gian còn lại ${mins} phút ${secs} giây`}><Clock3 size={17}/>{mins}:{secs}</span> : <span aria-label={`Câu ${index + 1} trên ${total}`}>{index+1}/{total}</span>}
     </div>
-    <article className="question-card">
-      <div className="question-meta"><span>{question.category}</span>{question.critical && <em><CircleAlert size={15}/> Câu điểm liệt</em>}<button aria-label={saved.includes(question.id)?"Bỏ lưu câu hỏi":"Lưu câu hỏi"} onClick={() => toggleSaved(question.id)}>{saved.includes(question.id)?<BookmarkCheck fill="currentColor"/>:<Bookmark/>}</button></div>
-      <p className="question-number">CÂU {question.id} · {index+1} / {total}</p>
-      <h1>{question.question}</h1>
-      {question.images.length > 0 && <div className="question-images">{question.images.map((image, imageIndex) => <Image key={image.src} src={image.src} alt={`Hình minh họa câu ${question.id}${question.images.length > 1 ? `, hình ${imageIndex + 1}` : ""}`} width={image.width} height={image.height} className="question-image" unoptimized />)}</div>}
-      <div className="answers">{question.answers.map((a,i) => {
-        const state = revealed ? i===question.correct ? "correct" : i===selected ? "wrong" : "" : selected===i ? "selected" : "";
-        const status = revealed ? i===question.correct ? " — Đáp án đúng" : i===selected ? " — Bạn đã chọn đáp án này" : "" : "";
-        return <button key={`${question.id}-${i}`} type="button" aria-pressed={selected===i} aria-label={`${String.fromCharCode(65+i)}. ${a}${status}`} disabled={revealed} className={state} onClick={() => setSelected(i)}><span>{String.fromCharCode(65+i)}</span><b>{a}</b>{revealed && i===question.correct && <Check aria-hidden="true"/>}{revealed && i===selected && i!==question.correct && <X aria-hidden="true"/>}</button>;
-      })}</div>
-      {revealed && question.explanation && <div className="explanation" role="status" aria-live="polite"><span><Sparkles size={18}/></span><div><b>Lý giải cho đáp án đúng</b><p style={{ whiteSpace: "pre-line" }}>{question.explanation}</p>{question.id === 260 && <p className="evidence-note">Phần lý giải này là nội dung bổ sung, không phải trích dẫn pháp luật. Vui lòng xem các lưu ý kỹ thuật trong nguồn bên dưới.</p>}</div></div>}
-      {revealed && <section className="evidence-block" aria-label="Nguồn và căn cứ"><h2>Nguồn và căn cứ</h2>{question.evidence.map((item, itemIndex) => <div className="evidence-item" key={`${item.kind}-${item.citation}-${itemIndex}`}><EvidenceKindLabel kind={item.kind}/><b>{item.title}</b><blockquote lang="vi">“{item.quote}”</blockquote><a href={item.url} target="_blank" rel="noreferrer">{item.citation} · Mở tài liệu gốc</a></div>)}{!question.evidence.some((item) => item.kind === "law") && <p className="evidence-note">Chưa tìm thấy trích dẫn pháp luật hoặc kỹ thuật trực tiếp xác nhận thao tác trong đáp án. Trích dẫn bộ đề chỉ xác nhận khóa đáp án, không tự nó thay thế căn cứ pháp lý.</p>}</section>}
-      <div className="quiz-actions">{!revealed ? <button className="primary" disabled={selected===null} onClick={submitAnswer}>Kiểm tra đáp án</button> : <button className="primary" onClick={nextQuestion}>{index===total-1?"Xem kết quả":"Câu tiếp theo"}<ArrowRight size={17}/></button>}</div>
-    </article>
+    <div className="quiz-card-container">
+      <button
+        type="button"
+        className="quiz-side-nav prev"
+        onClick={previousQuestion}
+        disabled={index === 0}
+        aria-label="Câu trước"
+        title="Câu trước (Mũi tên trái)"
+      >
+        <ChevronLeft size={22} />
+        <span className="side-nav-label">Trước</span>
+      </button>
+
+      <article className="question-card">
+        <div className="question-meta"><span>{question.category}</span>{question.critical && <em><CircleAlert size={15}/> Câu điểm liệt</em>}<button aria-label={saved.includes(question.id)?"Bỏ lưu câu hỏi":"Lưu câu hỏi"} onClick={() => toggleSaved(question.id)}>{saved.includes(question.id)?<BookmarkCheck fill="currentColor"/>:<Bookmark/>}</button></div>
+        <p className="question-number">CÂU {question.id} · {index+1} / {total}</p>
+        <h1>{question.question}</h1>
+        {question.images.length > 0 && <div className="question-images">{question.images.map((image, imageIndex) => <Image key={image.src} src={image.src} alt={`Hình minh họa câu ${question.id}${question.images.length > 1 ? `, hình ${imageIndex + 1}` : ""}`} width={image.width} height={image.height} className="question-image" unoptimized />)}</div>}
+        <div className="answers">{question.answers.map((a,i) => {
+          const state = revealed ? i===question.correct ? "correct" : i===selected ? "wrong" : "" : selected===i ? "selected" : "";
+          const status = revealed ? i===question.correct ? " — Đáp án đúng" : i===selected ? " — Bạn đã chọn đáp án này" : "" : "";
+          return <button key={`${question.id}-${i}`} type="button" aria-pressed={selected===i} aria-label={`${String.fromCharCode(65+i)}. ${a}${status}`} disabled={revealed} className={state} onClick={() => setSelected(i)}><span>{String.fromCharCode(65+i)}</span><b>{a}</b>{revealed && i===question.correct && <Check aria-hidden="true"/>}{revealed && i===selected && i!==question.correct && <X aria-hidden="true"/>}</button>;
+        })}</div>
+        {revealed && question.explanation && <div className="explanation" role="status" aria-live="polite"><span><Sparkles size={18}/></span><div><b>Lý giải cho đáp án đúng</b><p style={{ whiteSpace: "pre-line" }}>{question.explanation}</p>{question.id === 260 && <p className="evidence-note">Phần lý giải này là nội dung bổ sung, không phải trích dẫn pháp luật. Vui lòng xem các lưu ý kỹ thuật trong nguồn bên dưới.</p>}</div></div>}
+        {revealed && <section className="evidence-block" aria-label="Nguồn và căn cứ"><h2>Nguồn và căn cứ</h2>{question.evidence.map((item, itemIndex) => <div className="evidence-item" key={`${item.kind}-${item.citation}-${itemIndex}`}><EvidenceKindLabel kind={item.kind}/><b>{item.title}</b><blockquote lang="vi">“{item.quote}”</blockquote><a href={item.url} target="_blank" rel="noreferrer">{item.citation} · Mở tài liệu gốc</a></div>)}{!question.evidence.some((item) => item.kind === "law") && <p className="evidence-note">Chưa tìm thấy trích dẫn pháp luật hoặc kỹ thuật trực tiếp xác nhận thao tác trong đáp án. Trích dẫn bộ đề chỉ xác nhận khóa đáp án, không tự nó thay thế căn cứ pháp lý.</p>}</section>}
+        <div className="quiz-actions">
+          {index > 0 && (
+            <button type="button" className="secondary" onClick={previousQuestion}>
+              <ArrowLeft size={17} /> Câu trước
+            </button>
+          )}
+          {!revealed ? (
+            <button className="primary" disabled={selected===null} onClick={submitAnswer}>Kiểm tra đáp án</button>
+          ) : (
+            <button className="primary" onClick={nextQuestion}>
+              {index===total-1?"Xem kết quả":"Câu tiếp theo"}
+              <ArrowRight size={17}/>
+            </button>
+          )}
+        </div>
+      </article>
+
+      <button
+        type="button"
+        className="quiz-side-nav next"
+        onClick={nextQuestion}
+        disabled={index === total - 1}
+        aria-label="Câu tiếp theo"
+        title="Câu tiếp theo (Mũi tên phải)"
+      >
+        <ChevronRight size={22} />
+        <span className="side-nav-label">Tiếp</span>
+      </button>
+    </div>
   </div>;
 }
 
